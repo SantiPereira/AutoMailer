@@ -1,5 +1,17 @@
 {
-    "nombre": "Santiago",
-    "edad": 25,
-    "hobbies": ["programar", "futbol", "leer"]
-}
+    "additionalInfo": "",
+    "policyType": "Toner",
+    "notificationThreshold": 5,
+    "organization": "30",
+    "ruleType": "SUPPLY_RULE",
+    "location": "Capacitacion Cerrito 139",
+    "contactName": "2916 0161",
+    "assetModel": "Lexmark CX622ade",
+    "assetIpAddress": "10.59.1.30",
+    "assetSerialNumber": "7529038149W7N",
+    "supplySerialNumber": "CAB2434021DD",
+    "supplyName": "Toner",
+    "daysToReplace": 7.048,
+    "supply": "Black",
+    "currentValue": "1"
+  }

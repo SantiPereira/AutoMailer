@@ -1,15 +1,22 @@
 import json                             #Libreria para leer archivos .json 
 import imaplib                          # Para conectarnos al servidor IMAP de Gmail
 import email                            # Para procesar los emails
+import smtplib                          # Para conectarnos al servidor SMTP y enviar correos
+from email.mime.text import MIMEText    # Para crear el contenido del correo
 from email.header import decode_header  # Para decodificar los títulos
+from email.mime.multipart import MIMEMultipart  # Para correos con varias partes (texto + adjuntos)
+
+from cuerpoEmail import * 
+
 
 #TODO: DATOS DEL MAIL 
-#!Cambiar a alguno de urucopy ; 
+#!Cambiar a alguno de urucopy y mejorar la seguridad de las pass ; 
     #*Gmil
 correo = 'testchirola@gmail.com'
     #*Pass
 password = 'vyer mmxx jnae jscn'
     #*Remitnte deseado
+    #!Cambiar en un principio a un exel con datos de los clientes , lo ideal seria una base de datos , creear una interfaz para que el usuario haga un CRUD
 remitente = 'testchirola@gmail.com'
 with open('test.json' , 'r') as conexion :
     datos = json.load(conexion) ;
@@ -38,6 +45,8 @@ def convertir(body , subject) :
 
 #*Recorremos los correos encontrados
 for id_act in email_ids : 
+    datos_json = None 
+
     status , msg_data = mail.fetch(id_act , "(RFC822)") #Trae todo el correo 
 
     #*Recorremos el correo 
@@ -58,10 +67,23 @@ for id_act in email_ids :
 
             if nombre_arch_adj and nombre_arch_adj.endswith(".json"):
                 body = part.get_payload(decode=True).decode()
-                convertir(body, asunto_cod)
+                datos_json = convertir(body, asunto_cod)
+            
+            #* Solo si el JSON se procesó correctamente
+            if datos_json : 
+                if datos_json['upplyName'] == 'Toner' :
+                    cuerpo = emailAlertaToner(datos_json)
+                    print(cuerpo) 
+                elif datos_json['Unidad de Imagen'] : 
+                    cuerpo = emailAlertaUnidadImg(datos_json)
+                    print(cuerpo) 
+                else :
+                    cuerpo = generarCuerpoCorreo(datos_json)
+                    print(cuerpo) 
+                
+                mail.store(id_act, '+FLAGS', '\\Seen')  # Marcar como leído
 
-            if convertir(body, asunto_cod):  # Solo si el JSON se procesó correctamente
-                    mail.store(id_act, '+FLAGS', '\\Seen')  # Marcar como leído
+
 
     else:
         body = msg.get_payload(decode=True).decode()
