@@ -1,95 +1,117 @@
-import json                             #Libreria para leer archivos .json 
+import json                             # Librería para leer archivos .json 
 import imaplib                          # Para conectarnos al servidor IMAP de Gmail
 import email                            # Para procesar los emails
-import smtplib                          # Para conectarnos al servidor SMTP y enviar correos
-from email.mime.text import MIMEText    # Para crear el contenido del correo
 from email.header import decode_header  # Para decodificar los títulos
-from email.mime.multipart import MIMEMultipart  # Para correos con varias partes (texto + adjuntos)
 
-from cuerpoEmail import * 
+from cuerpoEmail import *               # Funciones que generan el cuerpo del correo
+from enviarEmail import *               # Función que envía los correos
 
 
-#TODO: DATOS DEL MAIL 
-#!Cambiar a alguno de urucopy y mejorar la seguridad de las pass ; 
-    #*Gmil
-correo = 'testchirola@gmail.com'
-    #*Pass
-password = 'vyer mmxx jnae jscn'
-    #*Remitnte deseado
-    #!Cambiar en un principio a un exel con datos de los clientes , lo ideal seria una base de datos , creear una interfaz para que el usuario haga un CRUD
-remitente = 'testchirola@gmail.com'
-with open('test.json' , 'r') as conexion :
-    datos = json.load(conexion) ;
+# =============================================================
+# TODO: DATOS DEL MAIL 
+# =============================================================
 
-#TODO: CONEXION CON GMAIL 
+correo = 'testchirola@gmail.com'          # Cuenta de Gmail
+password = 'vyer mmxx jnae jscn'          # Contraseña (usar App Password)
+remitente = 'testchirola@gmail.com'       # Desde qué remitente buscar correos
+
+#! En un futuro: cambiar a lectura desde Excel o BD
+with open('test.json', 'r') as conexion:
+    datos = json.load(conexion)
+
+
+# =============================================================
+# CONEXIÓN CON GMAIL (IMAP)
+# =============================================================
+
 mail = imaplib.IMAP4_SSL("imap.gmail.com")
 mail.login(correo, password)
-
-#*Seleccionamos la bandeja de entrada
 mail.select("inbox")
 
-#* Buscar mails del remitente
-status , mensajes = mail.search(None , f'FROM "{remitente}"')
-email_ids = mensajes[0].split() #Lista de los correos encontrado del remitente 
+# Buscar mails del remitente
+status, mensajes = mail.search(None, f'FROM "{remitente}"')
+email_ids = mensajes[0].split()  # Lista de los correos encontrados
 
-#TODO: FUNCION PARA PASAR UN .JOSN A TEXT
-def convertir(body , subject) :
+
+# =============================================================
+# FUNCIONES AUXILIARES
+# =============================================================
+
+def convertir(body, subject):
+    """Convierte el cuerpo de un correo en JSON (si es válido)."""
     try:
         datos = json.loads(body)
-        print(f"JSON encontrado en correo '{subject}':\n", datos)
+        print(f"✅ JSON encontrado en correo '{subject}':\n", datos)
         return datos
     except json.JSONDecodeError:
-        print(f"No hay JSON válido en correo '{subject}'")
+        print(f"⚠️ No hay JSON válido en correo '{subject}'")
         return None
 
 
-#*Recorremos los correos encontrados
-for id_act in email_ids : 
-    datos_json = None 
+# =============================================================
+# PROCESAR CADA CORREO
+# =============================================================
 
-    status , msg_data = mail.fetch(id_act , "(RFC822)") #Trae todo el correo 
+for id_act in email_ids:
+    datos_json = None
+    status, msg_data = mail.fetch(id_act, "(RFC822)")  # Trae todo el correo
 
-    #*Recorremos el correo 
-    for posicion_correo in msg_data :
-        if isinstance(posicion_correo , tuple) :
-            msg = email.message_from_bytes(posicion_correo[1]) 
+    for posicion_correo in msg_data:
+        if isinstance(posicion_correo, tuple):
+            msg = email.message_from_bytes(posicion_correo[1])
 
-    #*Decodificamos el asunto del correo
+    # Decodificar asunto
     asunto_cod = decode_header(msg.get("Subject"))[0][0]
-    if isinstance(asunto_cod , bytes) : 
+    if isinstance(asunto_cod, bytes):
         asunto_cod = asunto_cod.decode()
 
-    #*Verificamoe que el correo tenga varias partes
+    # Verificar si el correo tiene varias partes
     if msg.is_multipart():
-        for part in msg.walk() :
-            nombre_arch_adj = part.get_filename() 
+        for part in msg.walk():
+            nombre_arch_adj = part.get_filename()
             tipo_conteido = part.get_content_type()
 
+            # Procesar si hay un adjunto JSON
             if nombre_arch_adj and nombre_arch_adj.endswith(".json"):
                 body = part.get_payload(decode=True).decode()
                 datos_json = convertir(body, asunto_cod)
-            
-            #* Solo si el JSON se procesó correctamente
-            if datos_json : 
-                if datos_json['upplyName'] == 'Toner' :
+
+            # Si se pudo procesar el JSON
+            if datos_json:
+                # Generar el cuerpo del correo según el tipo de alerta
+                if datos_json.get('supplyName') == 'Toner':
                     cuerpo = emailAlertaToner(datos_json)
-                    print(cuerpo) 
-                elif datos_json['Unidad de Imagen'] : 
+                elif datos_json.get('Unidad de Imagen'):
                     cuerpo = emailAlertaUnidadImg(datos_json)
-                    print(cuerpo) 
-                else :
+                else:
                     cuerpo = generarCuerpoCorreo(datos_json)
-                    print(cuerpo) 
-                
-                mail.store(id_act, '+FLAGS', '\\Seen')  # Marcar como leído
 
+                # Destinatario — más adelante se puede obtener del JSON
+                destinatario = remitente 
 
+                # Enviar el correo
+                enviarCorreo(
+                    destinatario,
+                    f"Alerta: {datos_json.get('supplyName', 'Insumo')}",
+                    cuerpo,
+                    correo,
+                    password
+                )
+
+                # Marcar como leído
+                mail.store(id_act, '+FLAGS', '\\Seen')
 
     else:
+        # Si el correo no es multipart
         body = msg.get_payload(decode=True).decode()
-        convertir(body , asunto_cod)
+        convertir(body, asunto_cod)
 
 
+# =============================================================
+# FINALIZAR
+# =============================================================
 
 cantidad = len(email_ids)
-print(f"Se encontraron {cantidad} correos de {remitente}")
+print(f"\n📩 Se encontraron {cantidad} correos de {remitente}")
+mail.logout()
+print("✅ Conexión cerrada correctamente.")
