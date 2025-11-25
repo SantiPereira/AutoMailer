@@ -1,0 +1,14 @@
+CREATE TABLE Vendedor (
+    id_vendedor INT AUTO_INCREMENT PRIMARY KEY,
+    nombre_vendedor VARCHAR(100) NOT NULL,
+    correo_vendedor VARCHAR(150) NOT NULL UNIQUE
+);
+
+CREATE TABLE Empresa (
+    id_empresa INT PRIMARY KEY,
+    nombre_empresa VARCHAR(100) NOT NULL,
+    correo_empresa VARCHAR(150) NOT NULL UNIQUE,
+    id_vendedor INT,
+    activo BOOLEAN,
+    FOREIGN KEY (id_vendedor) REFERENCES Vendedor(id_vendedor)
+);
