@@ -12,7 +12,13 @@ from lectorIMAP import (
 
 from procesarJSON import (
     extraer_json_de_mensaje,
-    decodificar_asunto
+    decodificar_asunto,
+)
+
+from cuerpoEmail import (
+    generarCuerpoCorreo,
+    emailAlertaToner,
+    emailAlertaUnidadImg
 )
 
 from enviarEmail import enviarCorreo
@@ -68,6 +74,15 @@ def ejecutar_una_vez():
         # Definir destinatario
         destinatario = DESTINO_POR_DEFECTO
 
+        # Construir cuerpo dinámico según tipo de alerta
+        supply = datos_json.get("supply", "").lower()
+        if "toner" in supply:
+            cuerpo = emailAlertaToner(datos_json)
+        elif "unidad" in supply:
+            cuerpo = emailAlertaUnidadImg(datos_json)
+        else:
+            cuerpo = generarCuerpoCorreo(datos_json)
+
         # Enviar correo (a menos que sea Dry Run)
         if DRY_RUN:
             logging.info("🧪 DRY RUN ACTIVADO → No se enviará correo real.")
@@ -77,7 +92,7 @@ def ejecutar_una_vez():
                 enviarCorreo(
                     destinatario,
                     f"Alerta: {datos_json.get('supplyName', 'Insumo')}",
-                    "Este es el cuerpo del email generado automáticamente.",
+                    cuerpo,
                     EMAIL_USER,
                     EMAIL_PASSWORD
                 )

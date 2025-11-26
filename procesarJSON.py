@@ -1,8 +1,8 @@
-# procesadorJSON.py
 import json
-from email.header import decode_header
-from typing import Optional, Tuple, Dict
+import re
 import logging
+from email.header import decode_header
+from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -19,65 +19,64 @@ def decodificar_asunto(msg) -> str:
 
 def extraer_json_de_mensaje(msg) -> Optional[Dict]:
     """
-    Busca en el mensaje (multipart o no) un adjunto .json o un cuerpo que sea JSON.
+    Busca en el mensaje un adjunto .json, un cuerpo text/plain o JSON embebido en HTML.
     Devuelve el dict JSON o None.
     """
     subject = decodificar_asunto(msg)
     logger.debug(f"Decodificando mensaje con asunto: {subject}")
 
-    # Si multipart, buscar adjuntos
     if msg.is_multipart():
         for part in msg.walk():
             filename = part.get_filename()
             ctype = part.get_content_type()
-            if filename and filename.lower().endswith(".json"):
-                logger.info(f"Adjunto JSON encontrado: {filename} (asunto: {subject})")
-                payload = part.get_payload(decode=True)
-                if not payload:
-                    logger.warning("Adjunto encontrado pero sin contenido.")
-                    continue
-                try:
-                    text = payload.decode("utf-8")
-                except Exception:
-                    text = payload.decode("latin1", errors="replace")
-                try:
-                    datos = json.loads(text)
-                    return datos
-                except json.JSONDecodeError:
-                    logger.warning("JSON inválido en adjunto.")
-                    continue
 
-        # Si no hubo adjuntos .json, también podemos buscar en partes text/plain o text/html
-        for part in msg.walk():
-            ctype = part.get_content_type()
+            # Caso adjunto .json
+            if filename and filename.lower().endswith(".json"):
+                payload = part.get_payload(decode=True)
+                if payload:
+                    try:
+                        text = payload.decode("utf-8", errors="replace")
+                        return json.loads(text)
+                    except Exception as e:
+                        logger.warning(f"Error leyendo adjunto JSON: {e}")
+                        continue
+
+            # Caso cuerpo HTML con JSON embebido
+            if ctype == "text/html":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    try:
+                        html = payload.decode("utf-8", errors="replace")
+                        # Buscar bloque JSON dentro del HTML
+                        match = re.search(r"\{.*\}", html, re.DOTALL)
+                        if match:
+                            datos = json.loads(match.group(0))
+                            logger.info("✅ JSON encontrado dentro de HTML.")
+                            return datos
+                    except Exception as e:
+                        logger.warning(f"No se pudo extraer JSON de HTML: {e}")
+                        continue
+
+            # Caso cuerpo texto plano
             if ctype == "text/plain":
                 payload = part.get_payload(decode=True)
-                if not payload:
-                    continue
-                try:
-                    text = payload.decode("utf-8")
-                except Exception:
-                    text = payload.decode("latin1", errors="replace")
-                try:
-                    datos = json.loads(text)
-                    logger.info("JSON encontrado en cuerpo text/plain.")
-                    return datos
-                except json.JSONDecodeError:
-                    continue
+                if payload:
+                    try:
+                        text = payload.decode("utf-8", errors="replace")
+                        return json.loads(text)
+                    except Exception:
+                        continue
     else:
-        # no multipart -> cuerpo simple
+        # Mensaje no multipart
         payload = msg.get_payload(decode=True)
         if payload:
-            try:
-                text = payload.decode("utf-8")
-            except Exception:
-                text = payload.decode("latin1", errors="replace")
-            try:
-                datos = json.loads(text)
-                logger.info("JSON encontrado en cuerpo del mensaje (no multipart).")
-                return datos
-            except json.JSONDecodeError:
-                logger.debug("Cuerpo no es JSON.")
+            text = payload.decode("utf-8", errors="replace")
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(0))
+                except Exception:
+                    pass
 
-    logger.info("No se encontró JSON en el mensaje.")
+    logger.info("⚠️ No se encontró JSON válido en el mensaje.")
     return None

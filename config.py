@@ -13,6 +13,7 @@ EMAIL_USER = "testchirola@gmail.com"
 EMAIL_PASSWORD = "vyer mmxx jnae jscn"   # -> usa App Password
 # Filtro de remitente (quién envía los mails con adjuntos .json)
 REMITENTE_FILTRO = "no-reply@iss.lexmark.com"
+#REMITENTE_FILTRO = "santiagope.sp@gmail.com" 
 
 # Para pruebas: destinatario por defecto si no tenés BD todavía
 DESTINO_POR_DEFECTO = EMAIL_USER
